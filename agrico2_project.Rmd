@@ -1,0 +1,248 @@
+---
+title: "Level of CO2 Emission on Agricultural Production"
+author: "Justin Chow and Max Payen"
+date: "2023-03-15"
+output: html_document
+---
+```{r setup, echo=FALSE, message=F, warning=F, include=FALSE}
+
+#==============================================================================
+#   This chunk will be used for every assignment
+#==============================================================================
+
+  # Clear the working space
+    rm(list = ls())
+  
+  # Set working directory
+  setwd("C:/Users/14087/Documents/master/econ 2509/project")
+
+### Load the packages (all must have been installed)
+    library(tidyverse)
+    library(doBy)
+    library(foreign)
+    library(ivpack)
+    library(knitr)
+    library(lmtest)
+    library(readstata13)
+    library(sandwich)
+    library(stargazer)
+    library(AER)
+    library(gdata)
+    library(wooldridge)
+    library(openintro)
+    library(remotes)
+
+
+cse=function(reg) {
+        rob=sqrt(diag(vcovHC(reg, type="HC1")))
+        return(rob)
+        }
+
+ivse=function(reg) {
+			rob=robust.se(reg)[, 2]
+			return(rob)
+      }
+```
+
+## Loading Dataset 
+
+```{r data, echo=FALSE, warning=FALSE, include=FALSE}
+
+# load agrico2.csv dataset
+agrico2=read.csv("agrico2.csv", header=T, sep=",")
+# reading data and the summary data
+str(agrico2)
+# handle missing data
+agrico2 <- na.omit(agrico2)
+
+```
+
+## Descriptive Statistics
+
+```{r stargazer, echo=FALSE, warning=FALSE, comment="" }
+
+# Descriptive Statistics
+stargazer(agrico2[c("co2_emission", "land_area", "food_index", "crop_index")], type="text", digits=2, summary.stat=c("n", "mean", "median", "sd", "min", "max"), title="Descriptive Statistics")
+
+```
+
+### Briefly describe what you learn about the data.
+The Agriculture data set contains information on 60 countries from 2019 with the level of CO2 emissions, percent of land area used for agriculture, cereal yield (kg per hectare), and food production index. The median for the level of CO2 emission and food production index are lower than their mean, which suggests that all of the distributions are negatively skewed. The median for the food and crop production index are higher than its mean, which suggests that the distribution is positively skewed. 
+
+
+## Exploratory Data Analysis
+
+```{r image1, echo=FALSE, warning=FALSE, message=FALSE, comment=""}
+
+# Line plot
+ggplot(agrico2, aes(x=log(co2_emission), y=crop_index)) + 
+  geom_point(col="blue") + 
+  geom_text(aes(label=code), hjust=1, vjust=1) + 
+  labs(title = "Crop production index on Level of CO2", x = "Level of CO2 emissions", y = "Crop production index") +
+  stat_smooth(method = "lm", col = "red", se=FALSE)
+
+```
+
+### Is there a relationship between level of CO2 emissions and the crop production index for all 60 countries?
+There seems to be a negative relationship between level of CO2 emissions and the crop production index of all 60 countries. There are European country outliers such as Croatia (HRV) and Armenia (ARM) that have much smaller crop production index compared to the rest of the countries, but other than that it resembles a linear relationship  with the average level of CO2 emission located where crop production index is 100.  
+
+
+```{r image2, echo=FALSE, message=F, warning=FALSE, comment=""}
+
+# Bar plot
+ggplot(agrico2, aes(x=crop_index, y=reorder(code, -crop_index), fill = co2_emission)) +
+  geom_bar(stat="identity") +
+  xlab("Crop Production Index") +
+  ylab("Country Code") +
+  theme_minimal(base_size = 10)
+
+```
+
+### Which countries has the highest crop production index? Which countries has the lowest crop production index? What is the Level of CO2 emission for each of these countries?
+
+The countries with the higher crop production index were smaller countries Romania, Nicaragua, and Honduras which also had some of the lowest levels of CO2 emissions. On the other hand, the countries with lower crop production index were larger countries Australia, Germany, and Poland. These countries also had some of the highest levels of CO2 emissions. These trends suggest that a larger country will have lower crop production index and a higher levels of CO2 emissions. 
+
+
+```{r hist, echo=FALSE, message=F, warning=FALSE, comment=""}
+
+# Categorical variable named lowcrop
+agrico2$lowcrop[agrico2$crop_index <= 103.41] <- "Low value" 
+agrico2$lowcrop[agrico2$crop_index > 103.41] <- "Higher value"
+
+# Histogram plot
+ggplot(agrico2, aes(x = co2_emission, fill = lowcrop)) + 
+  geom_histogram(binwidth=0.25, position="identity", alpha=0.4)
+
+```
+
+### What did you learn from countries with lower versus higher number of crop index against level of CO2 emission? Explain in detail the distribution of level of CO2 emissions. 
+
+The countries with high or low crop production index have distributions that is negatively skewed since the median is greater than the mean level of CO2 emissions. The higher crop production indexes are located near lower levels of CO2 emissions, while a few countries have high crop production index and high levels of CO2 emissions. These outliers represent countries that rely on machinery and factory production when processing their crops to be sold.
+
+
+```{r relation, echo=FALSE, message=F, warning=FALSE, comment=""}
+
+# transform GDP growth rate from character to numeric type
+agrico2$GDP = as.numeric(agrico2$GDP) 
+agrico2$GDP_growth = as.numeric(agrico2$GDP_growth) 
+
+# Relationship between GDP per capita growth rate and CO2 Emission 
+ggplot(agrico2, aes(x = GDP_growth, y=co2_emission, size = GDP, colour = code)) +
+  geom_point() +
+  theme(legend.position = "right") + 
+  scale_color_viridis_d() +
+  scale_size(range = c(2, 12)) +
+  scale_x_continuous(limits = c(-2, 8)) +
+  labs(title = 'GDP per capita growth rate and CO2 Emission', subtitle = 'Year: 2019', x = 'GDP per capita growth rate', y = 'Level of CO2 Emissions')
+
+```
+
+### Evaluate the relationship between GDP per capita growth rate and level of CO2 emissions. Explain the Gross Domestic Product (GDP) size for each country. How does this affect the relationship? 
+
+The relationship between GDP per capita growth rate and level of CO2 emissions is slightly negative relative to the size of the GDP. Specifically, the USA is an outlier in this relationship due to its higher level of CO2 emissions but lower GDP per capita growth rate. The size of the GDP shows that larger countries such as the USA, India, and China have a the highest GDP. As a result, they all have higher level of CO2 emission but the GDP per capita growth rate is relatively smaller than the rest of the countries. 
+
+
+## Regression Analysis
+
+```{r regression, echo=FALSE, message=F, warning=FALSE, comment=""}
+
+# transform type of GDP variables from character to numeric type
+agrico2$GDP = as.numeric(as.character(agrico2$GDP)) 
+agrico2$GDP_per_capita = as.numeric(as.character(agrico2$GDP_per_capita)) 
+
+# logarithm of co2_emission
+agrico2$lco2 <- log(agrico2$co2_emission)
+
+# Regressions
+# Run 4 regression models using lm command
+regr1<-lm(crop_index~lco2, data=agrico2)
+regr2<-lm(crop_index~lco2+food_index, data=agrico2)
+regr3<-lm(crop_index~lco2+food_index+land_area, data=agrico2)
+regr4<-lm(crop_index~lco2+food_index+land_area+log(GDP), data=agrico2)
+regr5<-lm(crop_index~lco2+food_index+land_area+log(GDP)+I(lco2*log(GDP)), data=agrico2)
+
+# Using stargazer to display your regression results 
+stargazer(regr1, regr2, regr3, regr4, regr5,
+          se=list(cse(regr1), cse(regr2), cse(regr3), cse(regr4), cse(regr5)), 
+          title="Effect of CO2 emissions on Crop Production Index", type="text", 
+          df=FALSE, digits=3, omit.stat=c( "f"))
+
+```
+
+### Explain carefully your decision focusing on the potential issue of omitted variable bias in your coefficient of interest, the expected sign and statistical significance of the effect of the control variables on crop production index, nonlinearities in the functional form, and fit of the regression.
+
+In regression 1, an increase in a country's level of CO2 emission by 1% reduces their crop production index by 3.015. With a absolute t-statistic of 2.00, level of CO2 emission is statistically significant at the 5% significance level.
+
+In regression 2, holding the food production index constant, an increase in a country's level of CO2 emission by 1% reduces their crop production index by 1.99. With an absolute t-statistic of 1.68, level of CO2 emission is statistically significant at the 10% significance level. Since the estimate of co2_emission variable increases from regression 1 to 2, we can conclude that regression 1 suffers from downward omitted variable bias. 
+
+In regression 3, the control variable agricultural land has a standardized beta coefficient of -0.09. Holding co2_emission and food production index constant, an increase in agricultural land by 1% decreases crop production index by 0.09. This control variable also changes the effect of a country's levels of CO2 emission on crop production index. Holding everything else constant, an increase in a country's level of CO2 emission by 1% reduces crop production index by 1.91. With an R2 of 0.589, we can say that this model explains 58.9% of the variation in crop production index, which is relatively high.
+
+According to both regression 2 and 3, level of CO2 emission has relatively the same negative effect on crop production index. The addition of agricultural land in regression 3 slightly raises the effect of level of CO2 emission on crop production index from -1.99 to -1.91. This is a sign of downward omitted variable bias.
+
+In regression 4, the control variable logarithm of GDP has a standardized beta coefficient of 0.88. Holding everything else constant, an increase in GDP by 1% increases crop production index by 0.88. This control variable also changes the effect of a country's levels of CO2 emission on crop production index. Holding everything else constant, an increase in a country's level of CO2 emission by 1% reduces crop production index by 2.74. With an R2 of 0.603, we can say that this model explains 60.3% of the variation in crop production index, which is a significant rise from the previous model.
+
+According to both regression 3 and 4, level of CO2 emission has a larger negative effect on crop production index. The addition of logarithm of GDP in regression 4 drastically reduces the effect of level of CO2 emission on crop production index from -1.91 to -2.73. This is a sign of upward omitted variable bias. 
+
+In regression 5, the effect of increasing level of CO2 emission by 1% on crop production index is -1.15 -0.06*log(GDP)%, holding everything else constant. That is, the effect is decreasing (in absolute value) in crop production index. If the country has a higher GDP, higher level of CO2 emission decreases the crop production index by less. In this sample, the effect of CO2 emission on crop production index remains negative, even if it is increasing in GDP. 
+
+The interaction term is not statistically significant at the 10% significance level. We fail to reject the null that the interaction term is equal to zero. Separately, both logarithm of GDP and level of CO2 emission are not statistically significant at the 10% significance level. This model can further be improved upon by finding a interaction term that is statistically significant in the cause-and-effect relationship between level of CO2 emission and crop production index.
+
+
+## Probit- and Logit- Model
+
+```{r pl, echo=FALSE, message=F, warning=FALSE, comment=""}
+
+summary(agrico2$crop_index)
+# Create dummy variable of crop index for the vast majority of the countries 
+agrico2$medcrop <- ifelse(agrico2$crop_index <= 109.37, 1, 0)
+
+# Run a probit- and logit- models using glm command
+p1=glm(medcrop~lco2+food_index+land_area+log(GDP), family=binomial(link="probit"), x=TRUE, data=agrico2)
+l1=glm(medcrop~lco2+food_index+land_area+log(GDP), family=binomial, x=TRUE, data=agrico2)
+
+# regression table
+stargazer(p1, l1, 
+          se=list(NULL, NULL), 
+          title="Probit- and Logit- Model of Medium-Sized Countries Crop Index",
+          type="text", df=FALSE, digits=3,
+          omit.stat=c( "f"))
+
+```
+
+## Marginal Error
+
+```{r marginal, echo=FALSE, message=F, warning=FALSE, comment=""}
+
+# calculate marginal error from probit- and logit- regression
+library(erer)
+fm1=maBina(p1, x.mean=FALSE, rev.dum=TRUE, digits=3)
+fm2=maBina(l1, x.mean=FALSE, rev.dum=TRUE, digits=3)
+
+# Using stargazer to display the marginal effects of the probit and logit regressions
+stargazer(p1, fm1, l1, fm2,
+          se=list(NULL, NULL, NULL, NULL), 
+          title="Marginal Effects",
+          type="text", df=FALSE, digits=3,
+          keep.stat=c("n","ll"))
+
+#calculate the pseudo-R2
+pseudoR2p1=(p1$null.deviance-p1$deviance)/p1$null.deviance
+pseudoR2l1=(l1$null.deviance-l1$deviance)/l1$null.deviance
+
+```
+
+### Results Discussion
+
+### LPM: The Effect of Level of CO2 Emission on Crop Production Index
+
+In the probit model, the estimates suggest that, everything else the same, an increase in level of CO2 emission by 1%, on average, will increase the probability of crop index for the vast majority of the countries, on average, 8.9% more than other countries. The effect is not statistically significant at more than a 10% significance level.
+
+In the logit model, the estimates suggest that, everything else the same, an increase in level of CO2 emission by 1%, on average, will increase the probability of a country within the vast majority of crop index by 8.2%. The effect is also not statistically significant at more than a 10% significance level.
+
+Probit Pseudo R2: `r round(pseudoR2p1, digits=3)`
+
+Logit Pseudo R2: `r round(pseudoR2l1, digits=3)`
+
+In the Probit and Logit specifications, levels of CO2 emission explains 31.1% of the variation in the probability of a country to fall within the vast majority of crop production index. Including food production index, agricultural land, and GDP improves the regression fit. These variables explain 31.6% of the variation in the probability of a country to fall within the vast majority of crop production index
+
+
