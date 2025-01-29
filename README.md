@@ -32,14 +32,11 @@ The datasets used in this project include:
 ## Scripts
 This repository contains the following R scripts:
 
-### eda_agrico2.R
-This script performs Exploratory Data Analysis (EDA) on the agricultural emissions and energy use datasets.
+1. `eda_agrico2.R`: This script performs Exploratory Data Analysis (EDA) on the agricultural emissions and energy use datasets.
 
-### elastic_regression_agrico2.R
-This script fits elastic regression models to the data and generates predictions based on the relationship between energy use and agricultural emissions.
+2. `elastic_regression_agrico2.R`: This script fits elastic regression models to the data and generates predictions based on the relationship between energy use and agricultural emissions.
 
-### shinyapp.R
-This script creates a Shiny app to visualize the results of the elastic regression models and allows users to interactively explore the data.
+3. `shinyapp.R`: This script creates a Shiny app to visualize the results of the elastic regression models and allows users to interactively explore the data.
 
 ## Shiny App
 The Shiny app provides an interactive interface to visualize the relationship between energy use and agricultural emissions. Users can adjust the input parameters to see how they affect the predictions.
